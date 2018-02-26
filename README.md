@@ -5,13 +5,13 @@ A simple implementation of the Canny Edge Detection Algorithm (currently without
 This project was implemented with PyTorch to take advantage of the parallelization of convolutions.
 
 The original image:
-![alt text](https://github.com/DCurro/CannyEdgePytorch/blob/master/fb_profile.jpg)
+<img src="https://github.com/DCurro/CannyEdgePytorch/blob/master/fb_profile.jpg" width="250">
 
 Finding the gradient magnitude:
-![alt text](https://github.com/DCurro/CannyEdgePytorch/blob/master/gradient_magnitude.png)
+<img src="https://github.com/DCurro/CannyEdgePytorch/blob/master/gradient_magnitude.png" width="250">
 
 Early thresholding (to show that edge thingging matters):
-![alt text](https://github.com/DCurro/CannyEdgePytorch/blob/master/thresholded.png)
+<img src="https://github.com/DCurro/CannyEdgePytorch/blob/master/thresholded.png" width="250">
 
 And finally, the image after non-maximum supressions:
-![alt text](https://github.com/DCurro/CannyEdgePytorch/blob/master/thin_edges.png)
+<img src="https://github.com/DCurro/CannyEdgePytorch/blob/master/thin_edges.png" width="250">
