@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from scipy.signal import gaussian
+from scipy.misc import imread, imsave
 
 
 class Net(nn.Module):
@@ -12,7 +13,6 @@ class Net(nn.Module):
 
         filter_size = 5
         generated_filters = gaussian(filter_size,std=1.0).reshape([1,filter_size])
-        # generated_filters = gaussian(filter_size,std=0.00001).reshape([1,filter_size])
 
         self.gaussian_filter_horizontal = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(1,filter_size), padding=(0,filter_size/2))
         self.gaussian_filter_horizontal.weight.data.copy_(torch.from_numpy(generated_filters))
@@ -65,13 +65,11 @@ class Net(nn.Module):
                                 [ 0, 1, 0],
                                 [ 0, 0, 0]])
 
-        self.angle_filters_0_135 = [filter_0, filter_45, filter_90, filter_135]
-        self.angle_filters_180_315 = [filter_180, filter_225, filter_270, filter_315]
+        all_filters = np.stack([filter_0, filter_45, filter_90, filter_135, filter_180, filter_225, filter_270, filter_315])
 
-        self.directional_filter_0 = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=filter_0.shape, padding=filter_0.shape[0] / 2)
-        self.directional_filter_0.bias.data.copy_(torch.from_numpy(np.array([0.0])))
-        self.directional_filter_1 = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=filter_0.shape, padding=filter_0.shape[0] / 2)
-        self.directional_filter_1.bias.data.copy_(torch.from_numpy(np.array([0.0])))
+        self.directional_filter = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=filter_0.shape, padding=filter_0.shape[-1] / 2)
+        self.directional_filter.weight.data.copy_(torch.from_numpy(all_filters))
+        self.directional_filter.bias.data.copy_(torch.from_numpy(np.zeros(shape=(all_filters.shape[0],))))
 
     def forward(self, img):
         img_r = img[:,0:1]
@@ -102,38 +100,28 @@ class Net(nn.Module):
         grad_mag += torch.sqrt(grad_x_b**2 + grad_y_b**2)
         grad_orientation = (torch.atan2(grad_y_r+grad_y_g+grad_y_b, grad_x_r+grad_x_g+grad_x_b) * (180.0/3.14159))
         grad_orientation += 180.0
-        # grad_orientation[grad_orientation<0] = 360+grad_orientation
-        # grad_orientation = grad_orientation % 180.0
         grad_orientation =  torch.round( grad_orientation / 45.0 ) * 45.0
 
         # THIN EDGES (NON-MAX SUPPRESSION)
 
-        is_maxes = []
+        all_filtered = self.directional_filter(grad_mag)
 
-        for angle_idx, angle_pair in enumerate([(0.0,180.0), (45.0,225.0), (90.0,270.0), (135.0,315.0)]):
-            angle_0 = angle_pair[0]
-            angle_1 = angle_pair[1]
+        inidices_positive = (grad_orientation / 45) % 8
+        inidices_negative = ((grad_orientation / 45) + 4) % 8
 
-            angle_filter_0 = self.angle_filters_0_135[angle_idx]
-            self.directional_filter_0.weight.data.copy_(torch.from_numpy(angle_filter_0))
-            diff_0 = self.directional_filter_0(grad_mag)
+        height = inidices_positive.size()[2]
+        width = inidices_positive.size()[3]
+        pixel_count = height * width
 
-            angle_filter_1 = self.angle_filters_180_315[angle_idx]
-            self.directional_filter_1.weight.data.copy_(torch.from_numpy(angle_filter_1))
-            diff_1 = self.directional_filter_1(grad_mag)
+        indices = (inidices_positive.view(-1).data * pixel_count + torch.FloatTensor([range(pixel_count)])).squeeze()
+        channel_select_filtered_positive = all_filtered.view(-1)[indices.long()].view(1,height,width)
 
-            diff = torch.min(diff_0,diff_1)
+        indices = (inidices_negative.view(-1).data * pixel_count + torch.FloatTensor([range(pixel_count)])).squeeze()
+        channel_select_filtered_negative = all_filtered.view(-1)[indices.long()].view(1,height,width)
 
-            diff_0 = diff.clone()
-            diff_0[grad_orientation!=angle_0] = 0.0
-            diff_1 = diff.clone()
-            diff_1[grad_orientation!=angle_1] = 0.0
+        channel_select_filtered = torch.stack([channel_select_filtered_positive,channel_select_filtered_negative])
 
-            diff = torch.max(diff_0, diff_1)
-
-            is_maxes += [diff>0.0]
-
-        is_max = torch.sum(torch.stack(is_maxes),dim=0)
+        is_max = channel_select_filtered.min(dim=0)[0] > 0.0
 
         thin_edges = grad_mag.clone()
         thin_edges[is_max==0] = 0.0
