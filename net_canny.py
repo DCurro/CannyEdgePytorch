@@ -12,11 +12,14 @@ class Net(nn.Module):
 
         filter_size = 5
         generated_filters = gaussian(filter_size,std=1.0).reshape([1,filter_size])
+        # generated_filters = gaussian(filter_size,std=0.00001).reshape([1,filter_size])
 
         self.gaussian_filter_horizontal = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(1,filter_size), padding=(0,filter_size/2))
         self.gaussian_filter_horizontal.weight.data.copy_(torch.from_numpy(generated_filters))
+        self.gaussian_filter_horizontal.bias.data.copy_(torch.from_numpy(np.array([0.0])))
         self.gaussian_filter_vertical = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(filter_size,1), padding=(filter_size/2,0))
         self.gaussian_filter_vertical.weight.data.copy_(torch.from_numpy(generated_filters.T))
+        self.gaussian_filter_vertical.bias.data.copy_(torch.from_numpy(np.array([0.0])))
 
         sobel_filter = np.array([[1, 0, -1],
                                  [2, 0, -2],
@@ -24,17 +27,19 @@ class Net(nn.Module):
 
         self.sobel_filter_horizontal = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=sobel_filter.shape, padding=sobel_filter.shape[0]/2)
         self.sobel_filter_horizontal.weight.data.copy_(torch.from_numpy(sobel_filter))
+        self.sobel_filter_horizontal.bias.data.copy_(torch.from_numpy(np.array([0.0])))
         self.sobel_filter_vertical = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=sobel_filter.shape, padding=sobel_filter.shape[0]/2)
         self.sobel_filter_vertical.weight.data.copy_(torch.from_numpy(sobel_filter.T))
+        self.sobel_filter_vertical.bias.data.copy_(torch.from_numpy(np.array([0.0])))
 
         # filters were flipped manually
         filter_0 = np.array([   [ 0, 0, 0],
-                                [ 0, 1,-1],
+                                [ 0, 1, -1],
                                 [ 0, 0, 0]])
 
-        filter_45 = np.array([  [ 0, 0, 0],
+        filter_45 = np.array([  [0, 0, 0],
                                 [ 0, 1, 0],
-                                [ 0, 0,-1]])
+                                [ 0, 0, -1]])
 
         filter_90 = np.array([  [ 0, 0, 0],
                                 [ 0, 1, 0],
@@ -56,7 +61,7 @@ class Net(nn.Module):
                                 [ 0, 1, 0],
                                 [ 0, 0, 0]])
 
-        filter_315 = np.array([ [ 0, 0,-1],
+        filter_315 = np.array([ [ 0, 0, -1],
                                 [ 0, 1, 0],
                                 [ 0, 0, 0]])
 
@@ -64,8 +69,9 @@ class Net(nn.Module):
         self.angle_filters_180_315 = [filter_180, filter_225, filter_270, filter_315]
 
         self.directional_filter_0 = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=filter_0.shape, padding=filter_0.shape[0] / 2)
+        self.directional_filter_0.bias.data.copy_(torch.from_numpy(np.array([0.0])))
         self.directional_filter_1 = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=filter_0.shape, padding=filter_0.shape[0] / 2)
-
+        self.directional_filter_1.bias.data.copy_(torch.from_numpy(np.array([0.0])))
 
     def forward(self, img):
         img_r = img[:,0:1]
@@ -95,8 +101,9 @@ class Net(nn.Module):
         grad_mag += torch.sqrt(grad_x_g**2 + grad_y_g**2)
         grad_mag += torch.sqrt(grad_x_b**2 + grad_y_b**2)
         grad_orientation = (torch.atan2(grad_y_r+grad_y_g+grad_y_b, grad_x_r+grad_x_g+grad_x_b) * (180.0/3.14159))
-        grad_orientation[grad_orientation<0] = 360+grad_orientation
-        grad_orientation = grad_orientation % 180.0
+        grad_orientation += 180.0
+        # grad_orientation[grad_orientation<0] = 360+grad_orientation
+        # grad_orientation = grad_orientation % 180.0
         grad_orientation =  torch.round( grad_orientation / 45.0 ) * 45.0
 
         # THIN EDGES (NON-MAX SUPPRESSION)
@@ -115,10 +122,14 @@ class Net(nn.Module):
             self.directional_filter_1.weight.data.copy_(torch.from_numpy(angle_filter_1))
             diff_1 = self.directional_filter_1(grad_mag)
 
+            diff = torch.min(diff_0,diff_1)
+
+            diff_0 = diff.clone()
             diff_0[grad_orientation!=angle_0] = 0.0
+            diff_1 = diff.clone()
             diff_1[grad_orientation!=angle_1] = 0.0
 
-            diff = diff_0+diff_1
+            diff = torch.max(diff_0, diff_1)
 
             is_maxes += [diff>0.0]
 
@@ -132,10 +143,10 @@ class Net(nn.Module):
         thresholded = thin_edges.clone()
         thresholded[thin_edges<self.threshold] = 0.0
 
-        assert grad_mag.size() == grad_orientation.size() == thin_edges.size() == thresholded.size()
-
         early_threshold = grad_mag.clone()
         early_threshold[grad_mag<self.threshold] = 0.0
+
+        assert grad_mag.size() == grad_orientation.size() == thin_edges.size() == thresholded.size() == early_threshold.size()
 
         return blurred_img, grad_mag, grad_orientation, thin_edges, thresholded, early_threshold
 
