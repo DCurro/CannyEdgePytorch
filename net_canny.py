@@ -6,10 +6,11 @@ from scipy.misc import imread, imsave
 
 
 class Net(nn.Module):
-    def __init__(self, threshold=10.0):
+    def __init__(self, threshold=10.0, use_cuda=False):
         super(Net, self).__init__()
 
         self.threshold = threshold
+        self.use_cuda = use_cuda
 
         filter_size = 5
         generated_filters = gaussian(filter_size,std=1.0).reshape([1,filter_size])
@@ -112,11 +113,14 @@ class Net(nn.Module):
         height = inidices_positive.size()[2]
         width = inidices_positive.size()[3]
         pixel_count = height * width
+        pixel_range = torch.FloatTensor([range(pixel_count)])
+        if self.use_cuda:
+            pixel_range = torch.cuda.FloatTensor([range(pixel_count)])
 
-        indices = (inidices_positive.view(-1).data * pixel_count + torch.FloatTensor([range(pixel_count)])).squeeze()
+        indices = (inidices_positive.view(-1).data * pixel_count + pixel_range).squeeze()
         channel_select_filtered_positive = all_filtered.view(-1)[indices.long()].view(1,height,width)
 
-        indices = (inidices_negative.view(-1).data * pixel_count + torch.FloatTensor([range(pixel_count)])).squeeze()
+        indices = (inidices_negative.view(-1).data * pixel_count + pixel_range).squeeze()
         channel_select_filtered_negative = all_filtered.view(-1)[indices.long()].view(1,height,width)
 
         channel_select_filtered = torch.stack([channel_select_filtered_positive,channel_select_filtered_negative])

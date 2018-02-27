@@ -11,7 +11,7 @@ def canny(raw_img, use_cuda=False):
     img = torch.from_numpy(raw_img.transpose((2, 0, 1)))
     batch = torch.stack([img]).float()
 
-    net = Net(threshold=3.0)
+    net = Net(threshold=3.0, use_cuda=use_cuda)
     if use_cuda:
         net.cuda()
     net.eval()
@@ -40,4 +40,5 @@ if __name__ == '__main__':
     #                     [0, 0, 0, 0, 0]     ])
     # img = np.stack([img,img,img]).transpose([1,2,0])
 
-    canny(img, use_cuda=False)
+    # canny(img, use_cuda=False)
+    canny(img, use_cuda=True)
