@@ -18,4 +18,4 @@ Early thresholding (to show that edge thingging matters):
 
 And finally, the image after non-maximum supressions:
 
-<img src="https://github.com/DCurro/CannyEdgePytorch/blob/master/thin_edges.png" width="400">
+<img src="https://github.com/DCurro/CannyEdgePytorch/blob/master/final.png" width="400">
