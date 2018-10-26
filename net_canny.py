@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 from scipy.signal import gaussian
-from scipy.misc import imread, imsave
 
 
 class Net(nn.Module):
@@ -15,10 +14,10 @@ class Net(nn.Module):
         filter_size = 5
         generated_filters = gaussian(filter_size,std=1.0).reshape([1,filter_size])
 
-        self.gaussian_filter_horizontal = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(1,filter_size), padding=(0,filter_size/2))
+        self.gaussian_filter_horizontal = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(1,filter_size), padding=(0,filter_size//2))
         self.gaussian_filter_horizontal.weight.data.copy_(torch.from_numpy(generated_filters))
         self.gaussian_filter_horizontal.bias.data.copy_(torch.from_numpy(np.array([0.0])))
-        self.gaussian_filter_vertical = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(filter_size,1), padding=(filter_size/2,0))
+        self.gaussian_filter_vertical = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(filter_size,1), padding=(filter_size//2,0))
         self.gaussian_filter_vertical.weight.data.copy_(torch.from_numpy(generated_filters.T))
         self.gaussian_filter_vertical.bias.data.copy_(torch.from_numpy(np.array([0.0])))
 
@@ -26,10 +25,10 @@ class Net(nn.Module):
                                  [2, 0, -2],
                                  [1, 0, -1]])
 
-        self.sobel_filter_horizontal = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=sobel_filter.shape, padding=sobel_filter.shape[0]/2)
+        self.sobel_filter_horizontal = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=sobel_filter.shape, padding=sobel_filter.shape[0]//2)
         self.sobel_filter_horizontal.weight.data.copy_(torch.from_numpy(sobel_filter))
         self.sobel_filter_horizontal.bias.data.copy_(torch.from_numpy(np.array([0.0])))
-        self.sobel_filter_vertical = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=sobel_filter.shape, padding=sobel_filter.shape[0]/2)
+        self.sobel_filter_vertical = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=sobel_filter.shape, padding=sobel_filter.shape[0]//2)
         self.sobel_filter_vertical.weight.data.copy_(torch.from_numpy(sobel_filter.T))
         self.sobel_filter_vertical.bias.data.copy_(torch.from_numpy(np.array([0.0])))
 
@@ -68,8 +67,8 @@ class Net(nn.Module):
 
         all_filters = np.stack([filter_0, filter_45, filter_90, filter_135, filter_180, filter_225, filter_270, filter_315])
 
-        self.directional_filter = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=filter_0.shape, padding=filter_0.shape[-1] / 2)
-        self.directional_filter.weight.data.copy_(torch.from_numpy(all_filters))
+        self.directional_filter = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=filter_0.shape, padding=filter_0.shape[-1] // 2)
+        self.directional_filter.weight.data.copy_(torch.from_numpy(all_filters[:, None, ...]))
         self.directional_filter.bias.data.copy_(torch.from_numpy(np.zeros(shape=(all_filters.shape[0],))))
 
     def forward(self, img):
@@ -126,6 +125,7 @@ class Net(nn.Module):
         channel_select_filtered = torch.stack([channel_select_filtered_positive,channel_select_filtered_negative])
 
         is_max = channel_select_filtered.min(dim=0)[0] > 0.0
+        is_max = torch.unsqueeze(is_max, dim=0)
 
         thin_edges = grad_mag.clone()
         thin_edges[is_max==0] = 0.0
