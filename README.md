@@ -1,5 +1,7 @@
 # CannyEdgePytorch
 
+Uses PyTorch 0.4.1 and Python 3.7 (but probably works with 2.7 also).
+
 A simple implementation of the Canny Edge Detection Algorithm (currently without hysteresis).
 
 This project was implemented with PyTorch to take advantage of the parallelization of convolutions.
