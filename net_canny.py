@@ -72,9 +72,7 @@ class Net(nn.Module):
         self.directional_filter.bias.data.copy_(torch.from_numpy(np.zeros(shape=(all_filters.shape[0],))))
 
     def forward(self, img):
-        img_r = img[:,0:1]
-        img_g = img[:,1:2]
-        img_b = img[:,2:3]
+        img_r, img_g, img_b = torch.split(img, 1, dim=1)
 
         blur_horizontal = self.gaussian_filter_horizontal(img_r)
         blurred_img_r = self.gaussian_filter_vertical(blur_horizontal)
@@ -109,23 +107,23 @@ class Net(nn.Module):
         inidices_positive = (grad_orientation / 45) % 8
         inidices_negative = ((grad_orientation / 45) + 4) % 8
 
+        batch = inidices_positive.size()[0]
         height = inidices_positive.size()[2]
         width = inidices_positive.size()[3]
         pixel_count = height * width
-        pixel_range = torch.FloatTensor([range(pixel_count)])
+        pixel_range = torch.FloatTensor([range(pixel_count)] * batch)
         if self.use_cuda:
-            pixel_range = torch.cuda.FloatTensor([range(pixel_count)])
+            pixel_range = pixel_range.cuda()
 
-        indices = (inidices_positive.view(-1).data * pixel_count + pixel_range).squeeze()
-        channel_select_filtered_positive = all_filtered.view(-1)[indices.long()].view(1,height,width)
+        indices = (inidices_positive.view(-1).data * pixel_count + pixel_range.view(-1)).squeeze()
+        channel_select_filtered_positive = all_filtered.view(-1)[indices.long()].view(batch,1,height,width)
 
-        indices = (inidices_negative.view(-1).data * pixel_count + pixel_range).squeeze()
-        channel_select_filtered_negative = all_filtered.view(-1)[indices.long()].view(1,height,width)
+        indices = (inidices_negative.view(-1).data * pixel_count + pixel_range.view(-1)).squeeze()
+        channel_select_filtered_negative = all_filtered.view(-1)[indices.long()].view(batch,1,height,width)
 
         channel_select_filtered = torch.stack([channel_select_filtered_positive,channel_select_filtered_negative])
 
         is_max = channel_select_filtered.min(dim=0)[0] > 0.0
-        is_max = torch.unsqueeze(is_max, dim=0)
 
         thin_edges = grad_mag.clone()
         thin_edges[is_max==0] = 0.0
